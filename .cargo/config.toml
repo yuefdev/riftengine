@@ -1,0 +1,10 @@
+# A checkout that holds the engine as a subfolder may set a target-dir of its own; the engine
+# keeps its own. Cargo joins the two rustflags arrays there, which is harmless.
+[build]
+target-dir = "target"
+
+# The CRT goes into the binary. The DLL is loaded into the game, and a dynamic CRT would make
+# the game's loader look for VCRUNTIME140.dll on every machine the engine runs on. A standalone
+# checkout has no root config, so the flag has to be set here.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

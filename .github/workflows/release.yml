@@ -1,0 +1,109 @@
+name: Release
+
+# A tag such as v0.1.0 builds the host and the DLL on a GitHub-hosted runner, sends them to
+# SignPath for signing once the project is set up there (SIGNPATH_ORGANIZATION_ID is a repository
+# variable, SIGNPATH_API_TOKEN a repository secret) and publishes the files on the releases page.
+# Without those two, the release carries the unsigned files and says so.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag against the crate version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ("v$version" -ne $env:GITHUB_REF_NAME) {
+            throw "Tag $env:GITHUB_REF_NAME does not match the crate version v$version"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal --no-self-update
+
+      - name: Build
+        run: cargo build --release --locked -p riftengine-host -p riftengine-dll
+
+      - name: Collect
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item target/release/riftengine-host.exe, target/release/riftengine_dll.dll dist/
+
+      - name: Upload the unsigned files
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned
+          path: dist/*
+          if-no-files-found: error
+
+  sign:
+    needs: build
+    if: vars.SIGNPATH_ORGANIZATION_ID != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sign with SignPath
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: riftengine
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ needs.build.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+          parameters: |
+            version: "${{ needs.build.outputs.version }}"
+
+      - name: Keep the signed files
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed
+          path: signed/*
+          if-no-files-found: error
+
+  release:
+    needs: [build, sign]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.sign.result == 'success' || needs.sign.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the unsigned files
+        uses: actions/download-artifact@v4
+        with:
+          name: unsigned
+          path: out
+
+      - name: Replace them with the signed files
+        if: needs.sign.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: signed
+          path: out
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SIGNED: ${{ needs.sign.result == 'success' }}
+        run: |
+          if [ "$SIGNED" = "true" ]; then
+            notes="Signed with a certificate from SignPath Foundation. Free code signing provided by SignPath.io."
+          else
+            notes="Unsigned build. The game does not accept unsigned DLLs, so the host cannot attach to it until a signed build is published."
+          fi
+          gh release create "$GITHUB_REF_NAME" out/* --title "RiftEngine $GITHUB_REF_NAME" --notes "$notes"

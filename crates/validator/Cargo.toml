@@ -1,0 +1,17 @@
+[package]
+name = "riftengine-validator"
+description = "Checks packs against the RiftEngine rule set before anything is built from them"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+riftengine-rules.workspace = true
+ltk_hash.workspace = true
+ltk_meta.workspace = true
+xxhash-rust.workspace = true
+
+[dev-dependencies]
+ltk_wad.workspace = true

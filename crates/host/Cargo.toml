@@ -1,0 +1,42 @@
+[package]
+name = "riftengine-host"
+description = "Host half of RiftEngine: validates packs, builds the overlay and attaches the DLL"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+riftengine-core.workspace = true
+riftengine-rules.workspace = true
+riftengine-validator.workspace = true
+camino.workspace = true
+ltk_fantome.workspace = true
+ltk_mod_project.workspace = true
+ltk_overlay.workspace = true
+ltk_wad.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+zip.workspace = true
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_SystemInformation",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Memory",
+    "Win32_System_Pipes",
+    "Win32_System_Threading",
+    "Win32_System_IO",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+embed-resource.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
